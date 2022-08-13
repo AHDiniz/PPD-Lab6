@@ -1,3 +1,4 @@
 .vscode/
 venv
 __pycache__
+miner/private_key.pem

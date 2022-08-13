@@ -1,4 +1,4 @@
-from PubKeyMsg import PubKeyMsg
+from Client import Client
 from RSAKeys import RSAKeys
 
 
@@ -9,5 +9,5 @@ class SignedMsg:
     def serialize(self, key: RSAKeys):
         return key.sign(self.__dict__())
 
-    def deserialize(msg_signed: str, pub_key: PubKeyMsg):
-        return RSAKeys.verify(msg_signed, pub_key.PubKey)
+    def deserialize(self, msg_signed: str, client: Client):
+        return RSAKeys.verify(msg_signed, client)

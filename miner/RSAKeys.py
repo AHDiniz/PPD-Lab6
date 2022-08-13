@@ -1,9 +1,11 @@
 
+from typing import List
 from Crypto.Hash import SHA256
 from Crypto.Signature import PKCS1_v1_5
 from Crypto.PublicKey import RSA
 import subprocess
 import json
+from Client import Client
 
 from PubKeyMsg import PubKeyMsg
 
@@ -25,7 +27,7 @@ class RSAKeys():
         signer = PKCS1_v1_5.new(self.private_key)
         signature = signer.sign(h)
 
-        msg.update({"Sign", signature.hex()})
+        msg.update({"Sign": signature.hex()})
 
         msg_json = json.dumps(msg, ensure_ascii=True)
 
@@ -33,8 +35,8 @@ class RSAKeys():
 
     # Function for verifying a message and returning its content for the processing, if it is valid.
     # If it is not valid, it returns None.
-    def verify(msg_signed: str, pub_key: PubKeyMsg) -> dict:
-        msg_dict: dict = json.loads(msg_signed, ensure_ascii=True)
+    def verify(msg_signed: str, client: Client) -> dict:
+        msg_dict: dict = json.loads(msg_signed)
 
         signature = bytes.fromhex(msg_dict.pop("Sign"))
 
@@ -42,11 +44,13 @@ class RSAKeys():
 
         digest = SHA256.new(msg_json.encode('ascii'))
 
-        verifier = PKCS1_v1_5.new(pub_key.PubKey)
+        public_key = RSA.importKey(client.PubKey)
+        verifier = PKCS1_v1_5.new(public_key)
 
         verified = verifier.verify(digest, signature)
 
         if verified:
             return msg_dict
         else:
+            print("Signature is not valid.")
             return None

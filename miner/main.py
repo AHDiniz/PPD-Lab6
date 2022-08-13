@@ -128,7 +128,7 @@ class Consumer(thrd.Thread):
         channel.queue_bind(exchange=self.voting_routing_key,
                            queue=queue_name, routing_key=self.voting_routing_key)
         channel.basic_consume(on_message_callback=self.callback_voting,
-                              queue=queue_name, auto_ack=True)
+                              queue=queue_name, auto_ack=False)
 
         self.connection = connection
         self.channel = channel
@@ -209,6 +209,7 @@ class Consumer(thrd.Thread):
             ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
             return
         ch.basic_ack(delivery_tag=method.delivery_tag)
+
         body_dict = json.loads(body)
         client = self.findClient(body_dict['NodeId'])
         if client is None:
@@ -236,7 +237,7 @@ class Consumer(thrd.Thread):
 
     def callback_solution(self, ch, method, properties, body):
         global systemStatus
-        if systemStatus != SystemStatus.RUNNING:
+        if systemStatus == SystemStatus.VOTING:
             return
 
         body_dict = json.loads(body)
@@ -273,8 +274,9 @@ class Consumer(thrd.Thread):
     def callback_voting(self, ch, method, properties, body):
         global systemStatus
         if systemStatus != SystemStatus.VOTING:
-
+            ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
             return
+        ch.basic_ack(delivery_tag=method.delivery_tag)
 
         body_dict = json.loads(body)
         client = self.findClient(body_dict['NodeId'])

@@ -18,74 +18,38 @@ Este projeto requer ainda a instalação do [RabbitMQ&trade;](https://www.rabbit
 
 Para rodar este programa, primeiro esteja certo de ter o [RabbitMQ&trade;](https://www.rabbitmq.com/) instalado, para instalar é possível utilizar o script [inst.sh](./inst.sh) disponibilizado. Após isto, rode o cliente, caso esteja usando python, com o comando:
 
-`$ python miner/main.py`
+`$ python miner/main.py <number_of_nodes>`
 
 ou, caso esteja usando python3, o comando:
 
-`$ python3 miner/main.py`
-
-O sistema espera, atualmente que 10 processos identicos estejam rodando para continuar. Caso você esteja usando python3, pode rodar o script [run.sh](./run.sh):
-
-`$ bash run.sh`
-
-Caso você esteja usando python, pode modificar o script para rodar o comando python no lugar de python3.
+`$ python3 miner/main.py <number_of_nodes>`
 
 
-## Mensagens e Exchanges Utilizados
+## Detalhes de Implementação
 
-Abaixo temos a descrição dos exchanges utilizados e das mensagens enviadas.
+## RSA Keys
+Para geração das chaves, utilizamos o script `generate.sh`, então recuperamos a chave e salvamos em memória. Cada vez que a aplicação é iniciada, um novo par de chaves é gerado.
 
-### Exchanges Declarados
-| Exchange        | Descrição                      |
-|:----------------|:---------------------------------|
-| miner/init      | O cliente envia o seu id gerado localmente para conhecimento dos outros clientes. Todos os então clientes adicionam o id na sua cópia local. Todos os clientes reenviam a mensagem até que tenham todos os clientes na sua cópia local. |
-| miner/election  | Cada um dos clientes envia o seu id e um número de voto para eleição do líder. Todos os clientes escolhem o cliente com maior voto e maior id para adicionar como líder. Todos os clientes reenviam o voto e sua mensagem de cliente enquanto não receber todos os votos. |
-| miner/challenge | O Líder então gera e envia a transação, todos os clientes atualizam a lista local de transações com o objeto enviado e começam a tentar solucionar o mesmo com um número configurável de threads. |
-| miner/solution  | O cliente que solucionar localmente envia a solução para todos os clientes. Todos os clientes então verificam a solução e esperam o resultado de miner/voting caso tenham concordado com a solução, caso contrário, continuam procurando a solução  |
-| miner/voting    | Todos os clientes enviam o seu voto definido no subscribe da miner/solution. Ao receber todos os votos, cada cópia verifica se a maioria aceitou a solução, caso seja aceitado, o líder gera um novo desafio, caso contrário todos continuam procurando a solução da transação atual  |
+## Subscrever e Publicar ao mesmo tempo
+Dado que o pika não é thread safe, geramos uma conexão para cada conexão necessária.
 
-### Mensagem e seus bodys
+### Consumidor Principal
+Geramos uma conexão principal de consumo de todas as mensagens. Nela geramos filas específicas para publicarmos nos exchanges definidos na especificação, utilizando do NodeId do cliente mais um número random de 32 bits.
 
-#### miner/init
+### Publicador da thread principal 
+Geramos um publicador para envio das mensagens:
 
-| Propriedade | Tipo | Descrição                                      |
-|:------------|:-----|:-----------------------------------------------|
-| id          | int  | Id gerado pelo cliente que publicou a mensagem |
+- InitMsg
+- PubKeyMsg
+- ElectionMsg
+- ChallengeMsg
+
+Essas mensagens não são enviadas pelas outras threads então foi possível manter-las na main
 
 
-#### miner/election
-
-| Propriedade | Tipo | Descrição                                                                                             |
-|:------------|:-----|:------------------------------------------------------------------------------------------------------|
-| id          | int  | Id gerado pelo cliente que publicou a mensagem identificando o seu voto                               |
-| vote        | int  | Número gerado aleatoriamente pelo cliente que publicou a mensagem, identifica o seu voto para eleição |
-
-#### miner/challenge
-
-| Propriedade    | Tipo | Descrição                           |
-|:---------------|:-----|:------------------------------------|
-| transaction_id | int  | id da transação                     |
-| challenge      | int  | Dificuldade do desafio              |
-| generator_id   | int  | id do cliente que gerou a transação |
-
-#### miner/solution
-
-| Propriedade    | Tipo | Descrição                          |
-|:---------------|:-----|:-----------------------------------|
-| transaction_id | int  | id da transação                    |
-| seed           | int  | Seed utilizada                     |
-| client         | int  | id do cliente que enviou a solução |
-
-#### miner/voting
-
-| Propriedade    | Tipo | Descrição                          |
-|:---------------|:-----|:-----------------------------------|
-| voter          | int  | id do cliente enviando o voto      |
-| valid          | int  | voto do cliente                    |
-| transaction_id | int  | id da transação                    |
-| seed           | int  | Seed utilizada                     |
-| challenger     | int  | id do cliente que enviou a solução |
-
+#### Publicador das threads de mineração
+Para cada uma das threads de mineração do cliente, geramos uma nova conexão para podermos publicar a mensagem de solução.
+Essas threads rodam enquanto o estado do sistema estiver em Running e são recriadas todas as vezes que um novo desafio é recebido.
 
 ## Sobre o [RabbitMQ&trade;](https://www.rabbitmq.com/)
 

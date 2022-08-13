@@ -4,15 +4,15 @@ from SignedMsg import SignedMsg
 
 
 class SolutionMsg(SignedMsg):
-    def __init__(self, NodeId: int = -1, TransactionNumber: int = -1, Seed: str = None) -> None:
+    def __init__(self, NodeID: int = -1, TransactionNumber: int = -1, Seed: str = None) -> None:
         super().__init__()
-        self.NodeId = NodeId
+        self.NodeID = NodeID
         self.TransactionNumber = TransactionNumber
         self.Seed = Seed
 
     def __dict__(self) -> dict:
         return {
-            'NodeId': self.NodeId,
+            'NodeID': self.NodeID,
             'TransactionNumber': self.TransactionNumber,
             'Seed': self.Seed
         }
@@ -20,6 +20,6 @@ class SolutionMsg(SignedMsg):
     def deserialize(self, msg_signed: str, client: Client):
         msg_dict = super().deserialize(msg_signed, client)
         if msg_dict is not None:
-            self.NodeId = msg_dict["NodeId"]
+            self.NodeID = msg_dict["NodeID"]
             self.TransactionNumber = msg_dict["TransactionNumber"]
             self.Seed = msg_dict["Seed"]

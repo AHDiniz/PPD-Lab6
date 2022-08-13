@@ -37,7 +37,7 @@ class TransactionBO:
 
         transactionNumber: int = solutionMsg.TransactionNumber
         seed: str = solutionMsg.Seed
-        nodeId: int = solutionMsg.NodeId
+        nodeId: int = solutionMsg.NodeID
         transaction = self.transactionDAO.getTransaction(transactionNumber)
         if transaction is None:
             return ValidationStatus.ID_INVALIDO

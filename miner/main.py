@@ -135,8 +135,10 @@ class Consumer(thrd.Thread):
         self.clients = clients
         self.localClient = localClient
         self.rsaKeys = rsaKeys
-        self.solutionNodeId = None
         self.voting: List[VotingMsg] = []
+        self.SolutionID = -1
+        self.TransactionNumber = -1
+        self.Seed = None
 
     def findClient(self, NodeId: int) -> Client:
         return next(filter(lambda x: x.NodeId == NodeId, self.clients), None)
@@ -250,11 +252,11 @@ class Consumer(thrd.Thread):
         solutionMsg = SolutionMsg()
         solutionMsg.deserialize(body, client)
 
-        if solutionMsg.NodeId == -1:
+        if solutionMsg.NodeID == -1:
             return
 
         voting = VotingMsg(self.localClient.NodeId, solutionMsg.TransactionNumber,
-                           solutionMsg.Seed)
+                           solutionMsg.Seed, solutionMsg.NodeID)
 
         validation = transaction_bo.validateChallenge(solutionMsg)
         if(validation == ValidationStatus.VALIDO):
@@ -267,9 +269,12 @@ class Consumer(thrd.Thread):
         systemStatus = SystemStatus.VOTING
         systemStatusLock.release()
 
+        self.SolutionID = solutionMsg.NodeID
+        self.Seed = solutionMsg.Seed
+        self.TransactionNumber = solutionMsg.TransactionNumber
+
         self.channel.basic_publish(
             exchange=self.voting_routing_key,  routing_key=self.voting_routing_key, body=voting.serialize(self.rsaKeys))
-        self.solutionNodeId = solutionMsg.NodeId
 
     def callback_voting(self, ch, method, properties, body):
         global systemStatus
@@ -288,28 +293,33 @@ class Consumer(thrd.Thread):
         votingMsg = VotingMsg()
         votingMsg.deserialize(body, client)
 
-        if votingMsg.NodeId == -1:
+        if votingMsg.NodeID == -1:
             return
 
-        if not any(elem.NodeId == votingMsg.NodeId for elem in self.voting):
-            print("Client " + str(votingMsg.NodeId) + " voted")
+        if votingMsg.SolutionID != self.SolutionID or votingMsg.TransactionNumber != self.TransactionNumber or votingMsg.Seed != self.Seed:
+            print("Client " + str(votingMsg.NodeID) +
+                  " tried to vote for a different solution")
+            return
+
+        if not any(elem.NodeID == votingMsg.NodeID for elem in self.voting):
+            print("Client " + str(votingMsg.NodeID) + " voted")
             self.voting.append(votingMsg)
 
         if (len(self.voting) == clients_needed):
             result_voting = sum(
                 elem.Vote.value for elem in self.voting) > clients_needed / 2
             print("All clients voted, result for the challenger " +
-                  str(self.solutionNodeId) + " is:")
-            self.voting.sort(key=lambda x: x.NodeId)
-            print(tabulate([[vote.NodeId, 'Valid' if vote.Vote == VoteStatus.VOTO_SIM else 'Invalid', vote.TransactionNumber, vote.Seed]
-                            for vote in self.voting], headers=['Voter', 'Vote', 'Transaction', 'Seed'], tablefmt='fancy_grid'))
+                  str(votingMsg.SolutionID) + " is:")
+            self.voting.sort(key=lambda x: x.NodeID)
+            print(tabulate([[vote.NodeID, 'Valid' if vote.Vote == VoteStatus.VOTO_SIM else 'Invalid', vote.TransactionNumber, vote.Seed, vote.SolutionID]
+                            for vote in self.voting], headers=['Voter', 'Vote', 'Transaction', 'Seed', 'Challenger'], tablefmt='fancy_grid'))
 
             if (result_voting):
                 print("By simple majority the solution is deemed valid")
 
                 transaction = transaction_bo.getTransaction(
                     votingMsg.TransactionNumber)
-                transaction.Winner = self.solutionNodeId
+                transaction.Winner = votingMsg.SolutionID
                 transaction.Seed = votingMsg.Seed
 
                 systemStatusLock.acquire()
@@ -317,7 +327,7 @@ class Consumer(thrd.Thread):
                 systemStatusLock.release()
 
             else:
-                print("Solution invalid")
+                print("By simple majority the solution is deemed invalid")
 
                 systemStatusLock.acquire()
                 systemStatus = SystemStatus.RUNNING
@@ -496,7 +506,7 @@ class SeedCalculator(thrd.Thread):
             else:
                 # if the prefix is all zeros, the seed is valid and we can break and submit the solution
 
-                submit = SolutionMsg(NodeId=self.localClient.NodeId, TransactionNumber=self.transactionNumber,
+                submit = SolutionMsg(NodeID=self.localClient.NodeId, TransactionNumber=self.transactionNumber,
                                      Seed=seed)
                 submit_json = submit.serialize(self.rsaKeys)
 

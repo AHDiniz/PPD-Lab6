@@ -15,10 +15,10 @@ class VotingMsg(SignedMsg):
     def __dict__(self) -> dict:
         return {
             'NodeID': self.NodeID,
+            'SolutionID': self.SolutionID,
             'TransactionNumber': self.TransactionNumber,
             'Seed': self.Seed,
-            'Vote': self.Vote.value,
-            'SolutionID': self.SolutionID
+            'Vote': self.Vote.value
         }
 
     def deserialize(self, msg_signed: str, client: Client):

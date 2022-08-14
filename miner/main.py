@@ -140,11 +140,6 @@ class Consumer(thrd.Thread):
         self.TransactionNumber = -1
         self.Seed = None
 
-    def stop(self):
-        self.channel.stop_consuming()
-        self.channel.close()
-        self.connection.close()
-
     def findClient(self, NodeId: int) -> Client:
         return next(filter(lambda x: x.NodeId == NodeId, self.clients), None)
 
@@ -248,9 +243,9 @@ class Consumer(thrd.Thread):
             return
 
         body_dict = json.loads(body)
-        client = self.findClient(body_dict['NodeId'])
+        client = self.findClient(body_dict['NodeID'])
         if client is None:
-            print("Client " + str(body_dict['NodeId']) +
+            print("Client " + str(body_dict['NodeID']) +
                   " tried to send a message without joining")
             return
 
@@ -259,10 +254,8 @@ class Consumer(thrd.Thread):
 
         if solutionMsg.NodeID == -1:
             return
-
         voting = VotingMsg(self.localClient.NodeId, solutionMsg.TransactionNumber,
-                           solutionMsg.Seed, solutionMsg.NodeID)
-
+                           solutionMsg.Seed, VoteStatus.VOTO_NAO, solutionMsg.NodeID)
         validation = transaction_bo.validateChallenge(solutionMsg)
         if(validation == ValidationStatus.VALIDO):
             voting.Vote = VoteStatus.VOTO_SIM
@@ -289,15 +282,14 @@ class Consumer(thrd.Thread):
         ch.basic_ack(delivery_tag=method.delivery_tag)
 
         body_dict = json.loads(body)
-        client = self.findClient(body_dict['NodeId'])
+        client = self.findClient(body_dict['NodeID'])
         if client is None:
-            print("Client " + str(body_dict['NodeId']) +
+            print("Client " + str(body_dict['NodeID']) +
                   " tried to send a message without joining")
             return
 
         votingMsg = VotingMsg()
         votingMsg.deserialize(body, client)
-
         if votingMsg.NodeID == -1:
             return
 
@@ -491,12 +483,11 @@ class SeedCalculator(thrd.Thread):
         self.transactionNumber = transactionNumber
         self.challenge = challenge
 
-    
     def run(self):
 
         print("SeedCalculator {} started".format(self.__id))
         self.start_time = perf_counter()
-
+        global systemStatus
         while systemStatus == SystemStatus.RUNNING:
 
             # Calculate the seed
@@ -509,7 +500,6 @@ class SeedCalculator(thrd.Thread):
                 continue
             else:
                 # if the prefix is all zeros, the seed is valid and we can break and submit the solution
-
                 submit = SolutionMsg(NodeID=self.localClient.NodeId, TransactionNumber=self.transactionNumber,
                                      Seed=seed)
                 submit_json = submit.serialize(self.rsaKeys)
@@ -537,9 +527,6 @@ if __name__ == '__main__':
         main(publisher)
     except KeyboardInterrupt:
         print('Interrupted')
-        consumer.stop()
-        publisher.stop()
-
         try:
             sys.exit(0)
         except SystemExit:

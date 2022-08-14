@@ -24,3 +24,7 @@ class Publisher():
 
         self.connection = connection
         self.channel = channel
+    def stop(self):
+        self.channel.stop_consuming()
+        self.channel.close()
+        self.connection.close()

@@ -140,6 +140,11 @@ class Consumer(thrd.Thread):
         self.TransactionNumber = -1
         self.Seed = None
 
+    def stop(self):
+        self.channel.stop_consuming()
+        self.channel.close()
+        self.connection.close()
+
     def findClient(self, NodeId: int) -> Client:
         return next(filter(lambda x: x.NodeId == NodeId, self.clients), None)
 
@@ -339,8 +344,7 @@ class Consumer(thrd.Thread):
         self.channel.start_consuming()
 
 
-def main():
-    publisher = Publisher(routing_keys)
+def main(publisher: Publisher):
 
     channel = publisher.channel
 
@@ -372,7 +376,6 @@ def main():
 
             for thread in threads:
                 thread.join()
-
             threads = []
         elif systemStatus == SystemStatus.ELECTION:
             threads: List[SeedCalculator] = []
@@ -488,6 +491,7 @@ class SeedCalculator(thrd.Thread):
         self.transactionNumber = transactionNumber
         self.challenge = challenge
 
+    
     def run(self):
 
         print("SeedCalculator {} started".format(self.__id))
@@ -528,14 +532,14 @@ if __name__ == '__main__':
     clients_needed = int(sys.argv[1])
     consumer = Consumer(clients, localClient, rsaKeys, routing_keys)
     consumer.start()
+    publisher = Publisher(routing_keys)
     try:
-        main()
+        main(publisher)
     except KeyboardInterrupt:
         print('Interrupted')
+        consumer.stop()
+        publisher.stop()
 
-        consumer.channel.stop_consuming()
-        consumer.channel.close()
-        consumer.connection.close()
         try:
             sys.exit(0)
         except SystemExit:
